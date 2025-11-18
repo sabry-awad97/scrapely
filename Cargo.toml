@@ -1,0 +1,15 @@
+[workspace]
+members = [".", "scrapely_macros", "examples/*"]
+
+[package]
+name = "scrapely"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+scrapely_macros = { workspace = true }
+
+
+[workspace.dependencies]
+scrapely = { path = "." }
+scrapely_macros = { path = "./scrapely_macros" }
