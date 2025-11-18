@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 scrapely = { workspace = true }
+scraper = "0.24"

@@ -352,6 +352,7 @@ name = "quotes"
 version = "0.1.0"
 dependencies = [
  "scrapely",
+ "scraper",
 ]
 
 [[package]]

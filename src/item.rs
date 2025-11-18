@@ -111,9 +111,10 @@ pub trait Item: Sized {
 
     /// Extract multiple instances from a document or element
     ///
+    /// Uses the selector specified in `#[item(selector = "...")]` to find all matching elements.
+    ///
     /// # Arguments
     /// * `root` - The root element or document to search within
-    /// * `selector` - CSS selector to find elements
     ///
     /// # Returns
     /// * `Ok(Vec<Self>)` - All successfully extracted items
@@ -126,9 +127,9 @@ pub trait Item: Sized {
     /// use scrapely::Item;
     ///
     /// let html = Html::parse_document(r#"<html>...</html>"#);
-    /// let quotes = Quote::extract_all(&html.root_element(), ".quote")?;
+    /// let quotes = Quote::extract_all(&html.root_element())?;
     /// ```
-    fn extract_all<E>(root: &E, selector: &str) -> Result<Vec<Self>, ExtractionError>
+    fn extract_all<E>(root: &E) -> Result<Vec<Self>, ExtractionError>
     where
         E: ElementRef;
 }

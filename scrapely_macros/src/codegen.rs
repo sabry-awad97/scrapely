@@ -7,10 +7,13 @@ use syn::{Data, DeriveInput, Fields, Ident};
 use crate::parse::{ContainerAttrs, FieldAttrs};
 
 /// Generate the complete Item trait implementation
-pub fn generate_item_impl(input: &DeriveInput, _container_attrs: &ContainerAttrs) -> TokenStream {
+pub fn generate_item_impl(input: &DeriveInput, container_attrs: &ContainerAttrs) -> TokenStream {
     let name = &input.ident;
     let generics = &input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    // Get the container selector
+    let container_selector = container_attrs.selector.as_ref().unwrap();
 
     // Generate field extraction code
     let field_extractions = generate_field_extractions(input);
@@ -24,11 +27,11 @@ pub fn generate_item_impl(input: &DeriveInput, _container_attrs: &ContainerAttrs
                 #field_extractions
             }
 
-            fn extract_all<E>(root: &E, selector: &str) -> Result<Vec<Self>, scrapely::ExtractionError>
+            fn extract_all<E>(root: &E) -> Result<Vec<Self>, scrapely::ExtractionError>
             where
                 E: scrapely::ElementRef,
             {
-                let elements = root.select_all(selector);
+                let elements = root.select_all(#container_selector);
                 elements
                     .iter()
                     .map(|elem| Self::extract(elem))
@@ -194,12 +197,13 @@ pub fn generate_field_extraction(
         // Extract from HTML attribute
         if is_optional {
             // Optional field - return None on missing element or attribute
+            let inner_type = crate::types::extract_inner_type(field_type).unwrap();
             quote! {
                 let #field_name = element
                     .select_one(#selector)
                     .and_then(|elem| elem.attr(#attr_name))
                     .and_then(|attr_value| {
-                        <#field_type as scrapely::FromHtml>::from_attr(attr_value).ok()
+                        <#inner_type as scrapely::FromHtml>::from_attr(attr_value).ok()
                     });
             }
         } else if attrs.default {
@@ -244,12 +248,13 @@ pub fn generate_field_extraction(
         // Extract from text content
         if is_optional {
             // Optional field - return None on missing element
+            let inner_type = crate::types::extract_inner_type(field_type).unwrap();
             quote! {
                 let #field_name = element
                     .select_one(#selector)
                     .and_then(|elem| {
                         let text = elem.text();
-                        <#field_type as scrapely::FromHtml>::from_text(&text).ok()
+                        <#inner_type as scrapely::FromHtml>::from_text(&text).ok()
                     });
             }
         } else if attrs.default {
