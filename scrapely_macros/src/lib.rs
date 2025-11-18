@@ -5,6 +5,8 @@ use item_derive::Item;
 
 mod internals;
 mod item_derive;
+mod parse;
+mod validate;
 
 #[proc_macro_error]
 #[proc_macro_derive(Item, attributes(item, field))]
