@@ -1,23 +1,38 @@
 use proc_macro2::TokenStream;
-use syn::DeriveInput;
+use syn::{DeriveInput, Result};
+
+use crate::codegen;
+use crate::parse::ContainerAttrs;
+use crate::validate;
 
 #[derive(Debug)]
-pub struct Item {}
+pub struct Item {
+    input: DeriveInput,
+    container_attrs: ContainerAttrs,
+}
 
 impl TryFrom<DeriveInput> for Item {
     type Error = syn::Error;
 
-    fn try_from(_input: DeriveInput) -> Result<Self, Self::Error> {
-        Ok(Self {})
-    }
-}
+    fn try_from(input: DeriveInput) -> Result<Self> {
+        // Validate that it's a struct
+        validate::validate_struct_only(&input)?;
 
-impl quote::ToTokens for Item {
-    fn to_tokens(&self, _tokens: &mut TokenStream) {}
+        // Parse container attributes
+        let container_attrs = ContainerAttrs::from_attributes(&input.attrs)?;
+
+        // Validate container has selector
+        validate::validate_container_selector(&input, &container_attrs)?;
+
+        Ok(Self {
+            input,
+            container_attrs,
+        })
+    }
 }
 
 impl Item {
     pub fn generate_impl(&self) -> TokenStream {
-        quote::quote!(#self)
+        codegen::generate_item_impl(&self.input, &self.container_attrs)
     }
 }

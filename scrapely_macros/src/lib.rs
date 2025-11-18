@@ -3,9 +3,11 @@ use syn::parse_macro_input;
 
 use item_derive::Item;
 
+mod codegen;
 mod internals;
 mod item_derive;
 mod parse;
+mod types;
 mod validate;
 
 #[proc_macro_error]
