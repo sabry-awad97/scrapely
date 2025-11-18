@@ -8,6 +8,8 @@ edition = "2024"
 
 [dependencies]
 scrapely_macros = { workspace = true }
+thiserror = "2.0.17"
+scraper = "0.24.0"
 
 
 [workspace.dependencies]
