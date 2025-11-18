@@ -4,9 +4,11 @@ pub use scrapely_macros::Item;
 // Core modules
 mod backend;
 mod error;
+mod extract;
 mod item;
 
 // Public exports
 pub use backend::ElementRef;
 pub use error::{ExtractionError, ParseError};
+pub use extract::FromHtml;
 pub use item::Item as ItemTrait;
