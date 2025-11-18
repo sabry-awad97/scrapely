@@ -1,6 +1,5 @@
 use anyhow::Result;
 use scrapely::{Item, ItemTrait};
-use scraper::Html;
 
 #[derive(Debug, Item)]
 #[item(selector = ".quote")]
@@ -20,15 +19,12 @@ fn main() -> Result<()> {
 
     // Fetch the HTML from the website
     let response = reqwest::blocking::get("https://quotes.toscrape.com/page/1/")?;
-    let html_content: String = response.text()?;
-
-    // Parse the HTML
-    let html = Html::parse_document(&html_content);
+    let html_content = response.text()?;
 
     println!("Scraping quotes...\n");
 
-    // Extract all quotes from the page using the selector from #[item(selector = ".quote")]
-    let quotes = Quote::extract_all(&html.root_element())?;
+    // Extract all quotes directly from the HTML string
+    let quotes = Quote::from_html(&html_content)?;
 
     println!("Found {} quotes:\n", quotes.len());
 

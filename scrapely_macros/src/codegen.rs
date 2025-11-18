@@ -37,6 +37,11 @@ pub fn generate_item_impl(input: &DeriveInput, container_attrs: &ContainerAttrs)
                     .map(|elem| Self::extract(elem))
                     .collect()
             }
+
+            fn from_html(html: &str) -> Result<Vec<Self>, scrapely::ExtractionError> {
+                let document = scraper::Html::parse_document(html);
+                Self::extract_all(&document.root_element())
+            }
         }
     }
 }

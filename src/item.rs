@@ -132,4 +132,26 @@ pub trait Item: Sized {
     fn extract_all<E>(root: &E) -> Result<Vec<Self>, ExtractionError>
     where
         E: ElementRef;
+
+    /// Extract multiple instances directly from an HTML string
+    ///
+    /// This is a convenience method that parses the HTML and extracts items in one step.
+    /// Uses the selector specified in `#[item(selector = "...")]` to find all matching elements.
+    ///
+    /// # Arguments
+    /// * `html` - The HTML string to parse and extract from
+    ///
+    /// # Returns
+    /// * `Ok(Vec<Self>)` - All successfully extracted items
+    /// * `Err(ExtractionError)` - Failed to extract or parse
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use scrapely::Item;
+    ///
+    /// let html = r#"<html><body><div class="quote">...</div></body></html>"#;
+    /// let quotes = Quote::from_html(html)?;
+    /// ```
+    fn from_html(html: &str) -> Result<Vec<Self>, ExtractionError>;
 }
