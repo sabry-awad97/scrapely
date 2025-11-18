@@ -95,11 +95,102 @@ pub fn generate_field_extraction(
     let selector = attrs.selector.as_ref().unwrap();
     let field_name_str = field_name.to_string();
 
-    // Check if field is Option<T>
+    // Check if field is Option<T> or Vec<T>
     let is_optional = crate::types::is_option(field_type);
+    let is_vec = crate::types::is_vec(field_type);
 
-    // Check if extracting from attribute or text
-    if let Some(attr_name) = &attrs.attr {
+    // Check if the inner type is a nested Item
+    let inner_type_for_check = crate::types::get_item_type(field_type);
+    let is_nested_item = crate::types::is_likely_item_type(inner_type_for_check);
+
+    // Handle Vec<Item> fields - select multiple elements and extract each
+    if is_vec && is_nested_item {
+        let inner_type = crate::types::extract_inner_type(field_type).unwrap();
+        quote! {
+            let #field_name = {
+                let elements = element.select_all(#selector);
+                let mut results = Vec::new();
+                for elem in elements {
+                    match <#inner_type as scrapely::ItemTrait>::extract(&elem) {
+                        Ok(value) => results.push(value),
+                        Err(error) => return Err(error),
+                    }
+                }
+                results
+            };
+        }
+    } else if is_vec {
+        if let Some(attr_name) = &attrs.attr {
+            // Extract from HTML attributes of multiple elements
+            let inner_type = crate::types::extract_inner_type(field_type).unwrap();
+            quote! {
+                let #field_name = {
+                    let elements = element.select_all(#selector);
+                    let mut results = Vec::new();
+                    for elem in elements {
+                        if let Some(attr_value) = elem.attr(#attr_name) {
+                            match <#inner_type as scrapely::FromHtml>::from_attr(attr_value) {
+                                Ok(value) => results.push(value),
+                                Err(error) => {
+                                    return Err(scrapely::ExtractionError::ParseError {
+                                        field: #field_name_str.to_string(),
+                                        text: attr_value.to_string(),
+                                        error,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    results
+                };
+            }
+        } else {
+            // Extract from text content of multiple elements
+            let inner_type = crate::types::extract_inner_type(field_type).unwrap();
+            quote! {
+                let #field_name = {
+                    let elements = element.select_all(#selector);
+                    let mut results = Vec::new();
+                    for elem in elements {
+                        let text = elem.text();
+                        match <#inner_type as scrapely::FromHtml>::from_text(&text) {
+                            Ok(value) => results.push(value),
+                            Err(error) => {
+                                return Err(scrapely::ExtractionError::ParseError {
+                                    field: #field_name_str.to_string(),
+                                    text: text.clone(),
+                                    error,
+                                });
+                            }
+                        }
+                    }
+                    results
+                };
+            }
+        }
+    } else if is_nested_item && is_optional {
+        // Optional nested Item field
+        let inner_type = crate::types::extract_inner_type(field_type).unwrap();
+        quote! {
+            let #field_name = element
+                .select_one(#selector)
+                .and_then(|elem| <#inner_type as scrapely::ItemTrait>::extract(&elem).ok());
+        }
+    } else if is_nested_item {
+        // Required nested Item field
+        quote! {
+            let #field_name = {
+                let elem = element
+                    .select_one(#selector)
+                    .ok_or_else(|| scrapely::ExtractionError::MissingField {
+                        field: #field_name_str.to_string(),
+                        selector: #selector.to_string(),
+                    })?;
+
+                <#field_type as scrapely::ItemTrait>::extract(&elem)?
+            };
+        }
+    } else if let Some(attr_name) = &attrs.attr {
         // Extract from HTML attribute
         if is_optional {
             // Optional field - return None on missing element or attribute
@@ -110,6 +201,17 @@ pub fn generate_field_extraction(
                     .and_then(|attr_value| {
                         <#field_type as scrapely::FromHtml>::from_attr(attr_value).ok()
                     });
+            }
+        } else if attrs.default {
+            // Field with default - use Default::default() on failure
+            quote! {
+                let #field_name = element
+                    .select_one(#selector)
+                    .and_then(|elem| elem.attr(#attr_name))
+                    .and_then(|attr_value| {
+                        <#field_type as scrapely::FromHtml>::from_attr(attr_value).ok()
+                    })
+                    .unwrap_or_else(|| <#field_type as Default>::default());
             }
         } else {
             // Required field
@@ -149,6 +251,17 @@ pub fn generate_field_extraction(
                         let text = elem.text();
                         <#field_type as scrapely::FromHtml>::from_text(&text).ok()
                     });
+            }
+        } else if attrs.default {
+            // Field with default - use Default::default() on failure
+            quote! {
+                let #field_name = element
+                    .select_one(#selector)
+                    .and_then(|elem| {
+                        let text = elem.text();
+                        <#field_type as scrapely::FromHtml>::from_text(&text).ok()
+                    })
+                    .unwrap_or_else(|| <#field_type as Default>::default());
             }
         } else {
             // Required field
