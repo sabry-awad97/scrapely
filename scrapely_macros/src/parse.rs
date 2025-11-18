@@ -20,6 +20,12 @@ pub struct FieldAttrs {
 
     /// Use default value if extraction fails (e.g., #[field(default)])
     pub default: bool,
+
+    /// Regex pattern to extract from text (e.g., #[field(regex = r#""(.+)""#)])
+    pub regex: Option<String>,
+
+    /// Transform function to apply to extracted text (e.g., #[field(transform = "clean_text")])
+    pub transform: Option<String>,
 }
 
 impl ContainerAttrs {
@@ -83,6 +89,24 @@ impl FieldAttrs {
                     Ok(())
                 } else if meta.path.is_ident("default") {
                     field_attrs.default = true;
+                    Ok(())
+                } else if meta.path.is_ident("regex") {
+                    let value = meta.value()?;
+                    let lit: Lit = value.parse()?;
+                    if let Lit::Str(s) = lit {
+                        field_attrs.regex = Some(s.value());
+                    } else {
+                        return Err(meta.error("regex must be a string literal"));
+                    }
+                    Ok(())
+                } else if meta.path.is_ident("transform") {
+                    let value = meta.value()?;
+                    let lit: Lit = value.parse()?;
+                    if let Lit::Str(s) = lit {
+                        field_attrs.transform = Some(s.value());
+                    } else {
+                        return Err(meta.error("transform must be a string literal"));
+                    }
                     Ok(())
                 } else {
                     Err(meta.error("unknown field attribute"))

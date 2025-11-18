@@ -254,27 +254,32 @@ pub fn generate_field_extraction(
         if is_optional {
             // Optional field - return None on missing element
             let inner_type = crate::types::extract_inner_type(field_type).unwrap();
+            let text_processing = apply_text_processing(quote! { text }, attrs);
             quote! {
                 let #field_name = element
                     .select_one(#selector)
                     .and_then(|elem| {
                         let text = elem.text();
-                        <#inner_type as scrapely::FromHtml>::from_text(&text).ok()
+                        let processed_text = #text_processing;
+                        <#inner_type as scrapely::FromHtml>::from_text(&processed_text).ok()
                     });
             }
         } else if attrs.default {
             // Field with default - use Default::default() on failure
+            let text_processing = apply_text_processing(quote! { text }, attrs);
             quote! {
                 let #field_name = element
                     .select_one(#selector)
                     .and_then(|elem| {
                         let text = elem.text();
-                        <#field_type as scrapely::FromHtml>::from_text(&text).ok()
+                        let processed_text = #text_processing;
+                        <#field_type as scrapely::FromHtml>::from_text(&processed_text).ok()
                     })
                     .unwrap_or_else(|| <#field_type as Default>::default());
             }
         } else {
             // Required field
+            let text_processing = apply_text_processing(quote! { text }, attrs);
             quote! {
                 let #field_name = {
                     let elem = element
@@ -285,15 +290,46 @@ pub fn generate_field_extraction(
                         })?;
 
                     let text = elem.text();
+                    let processed_text = #text_processing;
 
-                    <#field_type as scrapely::FromHtml>::from_text(&text)
+                    <#field_type as scrapely::FromHtml>::from_text(&processed_text)
                         .map_err(|error| scrapely::ExtractionError::ParseError {
                             field: #field_name_str.to_string(),
-                            text: text.clone(),
+                            text: processed_text.clone(),
                             error,
                         })?
                 };
             }
         }
     }
+}
+
+/// Generate code to apply regex and/or transform to extracted text
+fn apply_text_processing(text_expr: TokenStream, attrs: &FieldAttrs) -> TokenStream {
+    let mut result = text_expr;
+
+    // Apply regex if specified
+    if let Some(regex_pattern) = &attrs.regex {
+        result = quote! {
+            {
+                let text = #result;
+                let re = ::regex::Regex::new(#regex_pattern)
+                    .expect("Invalid regex pattern");
+                re.captures(&text)
+                    .and_then(|caps| caps.get(1))
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or(text)
+            }
+        };
+    }
+
+    // Apply transform if specified
+    if let Some(transform_fn) = &attrs.transform {
+        let transform_ident = syn::Ident::new(transform_fn, proc_macro2::Span::call_site());
+        result = quote! {
+            #transform_ident(#result)
+        };
+    }
+
+    result
 }

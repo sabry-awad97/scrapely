@@ -10,7 +10,7 @@ edition = "2024"
 scrapely_macros = { workspace = true }
 thiserror = "2.0.17"
 scraper = "0.24.0"
-
+regex = "1.11"
 
 [workspace.dependencies]
 scrapely = { path = "." }

@@ -1,10 +1,12 @@
 use anyhow::Result;
 use scrapely::{Item, ItemTrait};
 
+const URL: &str = "https://quotes.toscrape.com/page/1/";
+
 #[derive(Debug, Item)]
 #[item(selector = ".quote")]
 struct Quote {
-    #[field(selector = "span.text")]
+    #[field(selector = "span.text", regex = r#"["“](.+)["”]"#)]
     text: String,
 
     #[field(selector = "small.author")]
@@ -14,12 +16,13 @@ struct Quote {
     tags: Vec<String>,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     println!("Fetching quotes from https://quotes.toscrape.com/page/1/...\n");
 
     // Fetch the HTML from the website
-    let response = reqwest::blocking::get("https://quotes.toscrape.com/page/1/")?;
-    let html_content = response.text()?;
+    let response = reqwest::get(URL).await?;
+    let html_content = response.text().await?;
 
     println!("Scraping quotes...\n");
 
