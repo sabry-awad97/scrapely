@@ -7,6 +7,7 @@ edition = "2024"
 scrapely = { workspace = true }
 
 anyhow = "1.0.100"
+async-trait = "0.1.89"
 regex = "1.12.2"
 reqwest = { version = "0.12.24", features = ["json"] }
 scraper = "0.24"

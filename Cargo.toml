@@ -8,9 +8,15 @@ edition = "2024"
 
 [dependencies]
 scrapely_macros = { workspace = true }
-thiserror = "2.0.17"
-scraper = "0.24.0"
+
+async-trait = "0.1.89"
+futures-util = "0.3.31"
 regex = "1.11"
+reqwest = { version = "0.12", features = ["json"] }
+scraper = "0.24.0"
+thiserror = "2.0.17"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1.17"
 
 [workspace.dependencies]
 scrapely = { path = "." }
