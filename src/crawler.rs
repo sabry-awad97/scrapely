@@ -868,7 +868,7 @@ impl Crawler {
         let processing_queue_capacity = self.config.processing_queue_capacity();
 
         let (urls_to_visit_tx, urls_to_visit_rx) = mpsc::channel::<String>(crawling_queue_capacity);
-        let (items_tx, items_rx) = mpsc::channel(processing_queue_capacity);
+        let (items_tx, items_rx) = mpsc::channel::<(String, T)>(processing_queue_capacity);
         let (new_urls_tx, mut new_urls_rx) = mpsc::channel::<VisitResult>(crawling_queue_capacity);
 
         // Initialize with start URLs
@@ -1008,7 +1008,7 @@ impl Crawler {
     fn launch_processors<T, E>(
         &self,
         spider: Arc<dyn Spider<Item = T, Error = E>>,
-        items: mpsc::Receiver<T>,
+        items: mpsc::Receiver<(String, T)>,
     ) -> tokio::task::JoinHandle<()>
     where
         T: Send + 'static,
@@ -1020,7 +1020,7 @@ impl Crawler {
 
         tokio::spawn(async move {
             ReceiverStream::new(items)
-                .for_each_concurrent(concurrency, |item| {
+                .for_each_concurrent(concurrency, |(url, item)| {
                     let spider = spider.clone();
                     let stats = stats.clone();
                     let observers = observers.clone();
@@ -1029,7 +1029,7 @@ impl Crawler {
                         match spider.process(item).await {
                             Ok(_) => {
                                 stats.item_extracted();
-                                observers.notify_item_extracted("").await;
+                                observers.notify_item_extracted(&url).await;
                             }
                             Err(err) => {
                                 let error_msg = err.to_string();
@@ -1050,7 +1050,7 @@ impl Crawler {
         spider: Arc<dyn Spider<Item = T, Error = E>>,
         urls_to_visit: mpsc::Receiver<String>,
         new_urls_tx: mpsc::Sender<VisitResult>,
-        items_tx: mpsc::Sender<T>,
+        items_tx: mpsc::Sender<(String, T)>,
         rate_limiter: Arc<dyn RateLimiter>,
     ) -> tokio::task::JoinHandle<()>
     where
@@ -1084,7 +1084,8 @@ impl Crawler {
                         match spider.scrape(queued_url.clone()).await {
                             Ok((items, new_urls)) => {
                                 for item in items {
-                                    if let Err(e) = items_tx.send(item).await {
+                                    if let Err(e) = items_tx.send((queued_url.clone(), item)).await
+                                    {
                                         eprintln!("Failed to send item: {}", e);
                                         stats.error_encountered();
                                     }
