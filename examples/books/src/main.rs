@@ -3,7 +3,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use scrapely::{Crawler, Item, ItemTrait, Spider};
 use thirtyfour::{DesiredCapabilities, WebDriver, prelude::WebDriverError};
+use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
+use tokio::time::{Duration, sleep};
 
 #[derive(thiserror::Error, Debug)]
 enum AppError {
@@ -11,6 +13,30 @@ enum AppError {
     WebDriver(#[from] WebDriverError),
     #[error("Extraction Failed: {0}")]
     ExtractionFailed(String),
+    #[error("IO Error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+struct ChromeManager {
+    process: Child,
+}
+
+impl ChromeManager {
+    async fn new(port: u16) -> Result<Self, AppError> {
+        let process = Command::new("examples/books/chromedriver/chromedriver.exe")
+            .arg(format!("--port={}", port))
+            .spawn()?;
+
+        // Give it a moment to start
+        sleep(Duration::from_secs(2)).await;
+
+        Ok(Self { process })
+    }
+
+    async fn stop(&mut self) -> Result<(), AppError> {
+        self.process.kill().await?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Item)]
@@ -59,7 +85,17 @@ impl Spider for BooksSpider {
             webdriver.source().await?
         };
 
-        let next_pages_link = vec![];
+        let document = scraper::Html::parse_document(&html);
+        let next_page_selector = scraper::Selector::parse("li.next a").unwrap();
+
+        let mut next_pages_link = vec![];
+        if let Some(element) = document.select(&next_page_selector).next()
+            && let Some(href) = element.value().attr("href")
+            && let Ok(base) = reqwest::Url::parse(&url)
+            && let Ok(next_url) = base.join(href)
+        {
+            next_pages_link.push(next_url.to_string());
+        }
 
         Ok((
             Self::Item::from_html(&html).map_err(|e| AppError::ExtractionFailed(e.to_string()))?,
@@ -78,6 +114,9 @@ impl Spider for BooksSpider {
 
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
+    // Start chromedriver
+    let mut chrome_manager = ChromeManager::new(9188).await?;
+
     // Build crawler with custom configuration and observer
     let crawler = Crawler::builder()
         .rate_limit(5.0) // 5 requests per second using token bucket
@@ -91,6 +130,9 @@ async fn main() -> Result<(), AppError> {
     crawler.crawl(spider.clone()).await;
 
     spider.close().await?;
+
+    // Kill chromedriver
+    chrome_manager.stop().await?;
 
     Ok(())
 }
