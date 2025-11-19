@@ -528,8 +528,22 @@ impl UrlNormalizer {
         }
 
         // Remove trailing slash (but keep it for root paths like "http://example.com/")
-        if normalized.ends_with('/') && normalized.matches('/').count() > 3 {
-            normalized.pop();
+        // Handle both cases: slash at end OR slash before query parameters
+        if let Some(query_pos) = normalized.find('?') {
+            // Has query parameters - check if there's a trailing slash before the ?
+            if normalized[..query_pos].ends_with('/') {
+                let path_slashes = normalized[..query_pos].matches('/').count();
+                if path_slashes > 3 {
+                    // Remove the slash before the query string
+                    normalized.remove(query_pos - 1);
+                }
+            }
+        } else if normalized.ends_with('/') {
+            // No query parameters - check trailing slash at end
+            let path_slashes = normalized.matches('/').count();
+            if path_slashes > 3 {
+                normalized.pop();
+            }
         }
 
         normalized
