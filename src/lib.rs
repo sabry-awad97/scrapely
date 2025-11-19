@@ -10,7 +10,11 @@ mod item;
 
 // Public exports
 pub use backend::ElementRef;
-pub use crawler::{Crawler, Spider};
+pub use crawler::{
+    CompletionDetector, ConfigError, CrawlError, CrawlObserver, CrawlStats, Crawler,
+    CrawlerBuilder, DelayLimiter, ObserverRegistry, RateLimiter, Spider, StatsTracker,
+    TokenBucketLimiter, UrlNormalizer, VisitResult,
+};
 pub use error::{ExtractionError, ParseError};
 pub use extract::FromHtml;
 pub use item::Item as ItemTrait;

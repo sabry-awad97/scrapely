@@ -1,7 +1,6 @@
 use anyhow::Result;
 use scrapely::{Crawler, Item, ItemTrait, Spider};
 use std::sync::Arc;
-use std::time::Duration;
 
 /// A spider for crawling quotes.toscrape.com
 pub struct QuoteSpider {
@@ -95,29 +94,77 @@ pub struct Quote {
     pub tags: Vec<String>,
 }
 
+/// Simple logging observer that prints crawl events
+struct LoggingObserver;
+
+#[async_trait::async_trait]
+impl scrapely::CrawlObserver for LoggingObserver {
+    async fn on_url_visited(&self, result: &scrapely::VisitResult) {
+        println!(
+            "✓ Visited: {} (found {} new URLs)",
+            result.visited_url,
+            result.discovered_urls.len()
+        );
+    }
+
+    async fn on_scrape_error(&self, url: &str, error: &str) {
+        eprintln!("✗ Error scraping {}: {}", url, error);
+    }
+
+    async fn on_crawl_complete(&self, stats: &scrapely::CrawlStats) {
+        println!(
+            "\n🎉 Crawl completed in {:.2}s",
+            stats.elapsed().as_secs_f64()
+        );
+        println!("   Rate: {:.2} URLs/sec", stats.urls_per_second());
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("=== Scrapely Crawler Example ===\n");
 
-    println!("\n=== Using the Crawler ===\n");
+    println!("\n=== Using the Enhanced Crawler ===\n");
     let spider = Arc::new(QuoteSpider::new(URL.to_string()));
 
-    // Build crawler with custom configuration
+    // Build crawler with custom configuration and observer
     let crawler = Crawler::builder()
-        .delay(Duration::from_millis(500))
+        .rate_limit(5.0) // 5 requests per second using token bucket
         .crawling_concurrency(2)
         .processing_concurrency(1)
-        .build();
+        .observe_with(Arc::new(LoggingObserver))
+        .build()
+        .expect("Failed to build crawler");
 
-    println!("Starting crawler...\n");
-    crawler.crawl(spider).await;
+    println!("Starting crawler with rate limiting and observer...\n");
+
+    // Example 1: Normal crawl
+    let stats = crawler.crawl(spider.clone()).await;
 
     // Display statistics
-    let stats = crawler.stats();
-    println!("\n=== Crawl Statistics ===");
-    println!("URLs visited: {}", stats.urls_visited());
-    println!("Items extracted: {}", stats.items_extracted());
-    println!("Errors encountered: {}", stats.errors_encountered());
+    println!("\n=== Final Crawl Statistics ===");
+    println!("URLs visited: {}", stats.urls_visited);
+    println!("Items extracted: {}", stats.items_extracted);
+    println!("Errors encountered: {}", stats.errors_encountered);
+    println!("Duration: {:.2}s", stats.elapsed().as_secs_f64());
+    println!("Rate: {:.2} URLs/sec", stats.urls_per_second());
+
+    // Example 2: Crawl with cancellation (commented out)
+    // use tokio::time::timeout;
+    // use tokio_util::sync::CancellationToken;
+    //
+    // let cancel_token = CancellationToken::new();
+    // let token_clone = cancel_token.clone();
+    //
+    // // Cancel after 5 seconds
+    // tokio::spawn(async move {
+    //     tokio::time::sleep(Duration::from_secs(5)).await;
+    //     token_clone.cancel();
+    // });
+    //
+    // let stats = crawler.crawl_with_cancellation(spider, cancel_token).await;
+    // println!("Crawl cancelled - visited {} URLs", stats.urls_visited);
+
     println!("\nCrawler finished!");
 
     Ok(())
