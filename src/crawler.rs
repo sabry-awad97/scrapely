@@ -189,9 +189,10 @@ impl CompletionDetector {
 
     /// Increment pending URL count when a URL is queued
     pub fn url_queued(&self) {
-        // Use Acquire ordering to ensure URL data is fully written before count increases
-        // This synchronizes with url_completed's Release to ensure proper happens-before relationship
-        self.pending_urls.fetch_add(1, Ordering::Acquire);
+        // Use SeqCst ordering to ensure total ordering with completion checks
+        // This prevents race conditions where completion is checked before work is visible
+        // Critical: must synchronize with SeqCst loads in check_completion()
+        self.pending_urls.fetch_add(1, Ordering::SeqCst);
     }
 
     /// Decrement pending URL count when a URL visit completes
@@ -414,7 +415,7 @@ impl TokenBucketLimiter {
 impl RateLimiter for TokenBucketLimiter {
     async fn acquire(&self) {
         loop {
-            {
+            let wait_duration = {
                 let mut tokens = self.tokens.lock().await;
                 let mut last_refill = self.last_refill.lock().await;
                 self.refill(&mut tokens, &mut last_refill);
@@ -423,9 +424,16 @@ impl RateLimiter for TokenBucketLimiter {
                     *tokens -= 1.0;
                     return;
                 }
-            }
-            // Wait a bit before checking again
-            sleep(Duration::from_millis(10)).await;
+
+                // Calculate how long to wait for the next token
+                // tokens_needed = 1.0 - current_tokens
+                // time_needed = tokens_needed / refill_rate
+                let tokens_needed = 1.0 - *tokens;
+                let seconds_to_wait = tokens_needed / self.refill_rate;
+                Duration::from_secs_f64(seconds_to_wait.max(0.001)) // Minimum 1ms
+            };
+
+            sleep(wait_duration).await;
         }
     }
 
