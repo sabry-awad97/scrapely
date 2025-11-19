@@ -124,6 +124,7 @@ async fn test_high_load_channel_capacity() {
         .crawling_concurrency(10)
         .processing_concurrency(10)
         .crawling_queue_multiplier(100) // Capacity = 10 * 100 = 1000
+        .delay(Duration::from_millis(0))
         .build()
         .unwrap();
 

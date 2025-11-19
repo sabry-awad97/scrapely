@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 /// Mock spider for testing basic crawling functionality
 struct MockSpider {
+    #[allow(clippy::type_complexity)]
     pages: Arc<Mutex<Vec<(String, Vec<String>, Vec<String>)>>>, // (url, items, new_urls)
 }
 

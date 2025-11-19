@@ -963,6 +963,12 @@ impl Crawler {
         new_urls_rx: &mut mpsc::Receiver<VisitResult>,
         cancel_token: Option<tokio_util::sync::CancellationToken>,
     ) {
+        // Check if we're already done (e.g. empty start URLs)
+        if self.completion.pending_count() == 0 && self.completion.active_count() == 0 {
+            drop(urls_to_visit_tx);
+            return;
+        }
+
         loop {
             tokio::select! {
                 // Process newly discovered URLs
