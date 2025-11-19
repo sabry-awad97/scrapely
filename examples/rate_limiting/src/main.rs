@@ -57,7 +57,8 @@ impl Spider for QuoteSpider {
         if let Ok(selector) = scraper::Selector::parse("li.next a")
             && let Some(element) = document.select(&selector).next()
             && let Some(href) = element.value().attr("href")
-            && !url.contains("/page/3/") // Stop after page 3
+            && !url.contains("/page/3/")
+        // Stop after page 3
         {
             let next_url = if href.starts_with("http") {
                 href.to_string()

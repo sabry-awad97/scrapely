@@ -1,7 +1,7 @@
 use anyhow::Result;
 use scrapely::{CrawlObserver, CrawlStats, Crawler, Item, ItemTrait, Spider, VisitResult};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A spider for crawling quotes.toscrape.com
 pub struct QuoteSpider {
@@ -110,7 +110,10 @@ impl MetricsObserver {
     fn print_summary(&self) {
         println!("\n=== Metrics Observer Summary ===");
         println!("URLs Queued: {}", self.urls_queued.load(Ordering::Relaxed));
-        println!("URLs Visited: {}", self.urls_visited.load(Ordering::Relaxed));
+        println!(
+            "URLs Visited: {}",
+            self.urls_visited.load(Ordering::Relaxed)
+        );
         println!("Errors: {}", self.errors.load(Ordering::Relaxed));
     }
 }

@@ -175,7 +175,10 @@ async fn main() -> Result<()> {
 
         let stats = crawler.crawl_with_cancellation(spider, cancel_token).await;
 
-        println!("\nResult: Visited {} URLs before cancellation", stats.urls_visited);
+        println!(
+            "\nResult: Visited {} URLs before cancellation",
+            stats.urls_visited
+        );
         println!("Items extracted: {}", stats.items_extracted);
     }
 

@@ -653,7 +653,7 @@ pub struct StatsTracker {
     items_extracted: AtomicUsize,
     errors_encountered: AtomicUsize,
     start_time: Instant,
-    tx: watch::Sender<CrawlStats>,
+    tx: Arc<Mutex<Option<watch::Sender<CrawlStats>>>>,
     rx: watch::Receiver<CrawlStats>,
 }
 
@@ -666,7 +666,7 @@ impl StatsTracker {
             items_extracted: AtomicUsize::new(0),
             errors_encountered: AtomicUsize::new(0),
             start_time: Instant::now(),
-            tx,
+            tx: Arc::new(Mutex::new(Some(tx))),
             rx,
         }
     }
@@ -708,7 +708,11 @@ impl StatsTracker {
             last_update: Instant::now(),
         };
         // Ignore send errors - if no one is listening, that's fine
-        let _ = self.tx.send(stats);
+        if let Ok(tx_guard) = self.tx.try_lock()
+            && let Some(tx) = tx_guard.as_ref()
+        {
+            let _ = tx.send(stats);
+        }
     }
 
     /// Get a snapshot of current statistics
@@ -719,6 +723,15 @@ impl StatsTracker {
             errors_encountered: self.errors_encountered.load(Ordering::Relaxed),
             start_time: self.start_time,
             last_update: Instant::now(),
+        }
+    }
+
+    /// Close the statistics sender to signal completion to subscribers
+    pub fn close(&self) {
+        // Drop the sender by replacing it with None
+        // This will cause all subscribers' changed() calls to return an error
+        if let Ok(mut tx_guard) = self.tx.try_lock() {
+            *tx_guard = None;
         }
     }
 }
@@ -859,17 +872,20 @@ impl Crawler {
             RateLimiterConfig::None => Arc::new(DelayLimiter::new(Duration::from_millis(0))),
         };
 
-        // Launch processors
-        self.launch_processors(spider.clone(), items_rx);
+        // Launch processors and get handle to wait for completion
+        let processor_handle = self.launch_processors(spider.clone(), items_rx);
 
-        // Launch scrapers
-        self.launch_scrapers(
+        // Launch scrapers and get handle to wait for completion
+        let scraper_handle = self.launch_scrapers(
             spider.clone(),
             urls_to_visit_rx,
             new_urls_tx.clone(),
             items_tx,
             rate_limiter,
         );
+
+        // Drop the original sender so the channel closes when all scrapers finish
+        drop(new_urls_tx);
 
         // Coordinate URL discovery
         self.coordinate_crawl(
@@ -880,8 +896,14 @@ impl Crawler {
         )
         .await;
 
-        // Wait for completion
-        self.completion.wait_for_completion().await;
+        // Wait for scrapers to finish (this will also close the items channel)
+        let _ = scraper_handle.await;
+
+        // Wait for processors to finish
+        let _ = processor_handle.await;
+
+        // Close the stats sender to signal completion to subscribers
+        self.stats.close();
 
         // Notify observers
         let final_stats = self.stats.snapshot();
@@ -901,29 +923,44 @@ impl Crawler {
         loop {
             tokio::select! {
                 // Process newly discovered URLs
-                Some(result) = new_urls_rx.recv() => {
-                    // Notify observers
-                    self.observers.notify_url_visited(&result).await;
+                result = new_urls_rx.recv() => {
+                    match result {
+                        Some(result) => {
+                            // Notify observers
+                            self.observers.notify_url_visited(&result).await;
 
-                    // Update stats
-                    self.stats.url_visited();
+                            // Update stats
+                            self.stats.url_visited();
 
-                    // Mark URL as completed
-                    self.completion.url_completed();
+                            // Mark URL as completed
+                            self.completion.url_completed();
 
-                    // Process discovered URLs
-                    for url in result.discovered_urls {
-                        let normalized = UrlNormalizer::normalize(&url);
-                        if visited_urls.insert(normalized) {
-                            self.completion.url_queued();
-                            self.observers.notify_url_queued(&url).await;
+                            // Process discovered URLs
+                            for url in result.discovered_urls {
+                                let normalized = UrlNormalizer::normalize(&url);
+                                if visited_urls.insert(normalized) {
+                                    self.completion.url_queued();
+                                    self.observers.notify_url_queued(&url).await;
 
-                            if let Err(e) = urls_to_visit_tx.send(url.clone()).await {
-                                let error = CrawlError::new(url, "channel_send", e.to_string());
-                                eprintln!("Failed to queue URL: {}", error.error);
-                                self.stats.error_encountered();
-                                self.observers.notify_scrape_error(&error.url, &error.error).await;
+                                    if let Err(e) = urls_to_visit_tx.send(url.clone()).await {
+                                        let error = CrawlError::new(url, "channel_send", e.to_string());
+                                        eprintln!("Failed to queue URL: {}", error.error);
+                                        self.stats.error_encountered();
+                                        self.observers.notify_scrape_error(&error.url, &error.error).await;
+                                    }
+                                }
                             }
+
+                            // Check if we're done - no pending URLs and no active scrapers
+                            let pending = self.completion.pending_count();
+                            let active = self.completion.active_count();
+                            if pending == 0 && active == 0 {
+                                break;
+                            }
+                        }
+                        None => {
+                            // Channel closed - all scrapers have finished
+                            break;
                         }
                     }
                 }
@@ -945,12 +982,13 @@ impl Crawler {
         drop(urls_to_visit_tx);
     }
 
-    /// Launch processor tasks
+    /// Launch processor tasks and return a handle to wait for completion
     fn launch_processors<T, E>(
         &self,
         spider: Arc<dyn Spider<Item = T, Error = E>>,
         items: mpsc::Receiver<T>,
-    ) where
+    ) -> tokio::task::JoinHandle<()>
+    where
         T: Send + 'static,
         E: Display + Send + 'static,
     {
@@ -981,10 +1019,10 @@ impl Crawler {
                     }
                 })
                 .await;
-        });
+        })
     }
 
-    /// Launch scraper tasks
+    /// Launch scraper tasks and return a handle to wait for completion
     fn launch_scrapers<T, E>(
         &self,
         spider: Arc<dyn Spider<Item = T, Error = E>>,
@@ -992,7 +1030,8 @@ impl Crawler {
         new_urls_tx: mpsc::Sender<VisitResult>,
         items_tx: mpsc::Sender<T>,
         rate_limiter: Arc<dyn RateLimiter>,
-    ) where
+    ) -> tokio::task::JoinHandle<()>
+    where
         T: Send + 'static,
         E: Display + Send + 'static,
     {
@@ -1040,7 +1079,8 @@ impl Crawler {
 
                         let result = VisitResult::new(queued_url.clone(), discovered_urls);
                         if let Err(e) = new_urls_tx.send(result).await {
-                            let error = CrawlError::new(queued_url, "channel_send", e.to_string());
+                            let error =
+                                CrawlError::new(queued_url.clone(), "channel_send", e.to_string());
                             eprintln!("Failed to send visit result: {}", error.error);
                             stats.error_encountered();
                         }
@@ -1051,7 +1091,8 @@ impl Crawler {
                 .await;
 
             drop(items_tx);
-        });
+            drop(new_urls_tx);
+        })
     }
 }
 
