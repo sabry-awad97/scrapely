@@ -1,3 +1,46 @@
+//! # Quotes Example
+//!
+//! A comprehensive example demonstrating the Scrapely web crawler with real-world usage.
+//!
+//! ## Features Demonstrated
+//!
+//! - **Custom Spider Implementation**: Shows how to implement the `Spider` trait for crawling quotes.toscrape.com
+//! - **Rate Limiting**: Token bucket-based rate limiting to respect server limits
+//! - **Observers**: Custom observer implementation for monitoring crawl progress
+//! - **Error Handling**: Proper error handling and reporting
+//! - **Statistics Tracking**: Real-time statistics collection and reporting
+//! - **Async/Await**: Full async implementation using Tokio
+//!
+//! ## Running the Example
+//!
+//! ```bash
+//! cargo run -p quotes
+//! ```
+//!
+//! ## What This Example Does
+//!
+//! 1. Creates a custom spider that crawls quotes.toscrape.com
+//! 2. Extracts quote data (text, author, tags) from each page
+//! 3. Automatically discovers and follows pagination links
+//! 4. Applies rate limiting (5 requests/second) to be respectful to the server
+//! 5. Uses an observer to log progress and events
+//! 6. Displays final statistics including URLs visited and extraction rate
+//!
+//! ## Key Components
+//!
+//! - **QuoteSpider**: Custom spider implementation that handles scraping logic
+//! - **Quote**: Data structure representing a quote (using the `Item` derive macro)
+//! - **LoggingObserver**: Observer that prints crawl events and statistics
+//! - **Crawler**: The main crawler with rate limiting and concurrency control
+//!
+//! ## Expected Output
+//!
+//! The example will:
+//! - Display each visited URL
+//! - Show the number of new URLs discovered on each page
+//! - Print extracted quotes with authors and tags
+//! - Display final statistics including crawl duration and request rate
+
 use anyhow::Result;
 use scrapely::{Crawler, Item, ItemTrait, Spider};
 use std::sync::Arc;
@@ -148,22 +191,6 @@ async fn main() -> Result<()> {
     println!("Errors encountered: {}", stats.errors_encountered);
     println!("Duration: {:.2}s", stats.elapsed().as_secs_f64());
     println!("Rate: {:.2} URLs/sec", stats.urls_per_second());
-
-    // Example 2: Crawl with cancellation (commented out)
-    // use tokio::time::timeout;
-    // use tokio_util::sync::CancellationToken;
-    //
-    // let cancel_token = CancellationToken::new();
-    // let token_clone = cancel_token.clone();
-    //
-    // // Cancel after 5 seconds
-    // tokio::spawn(async move {
-    //     tokio::time::sleep(Duration::from_secs(5)).await;
-    //     token_clone.cancel();
-    // });
-    //
-    // let stats = crawler.crawl_with_cancellation(spider, cancel_token).await;
-    // println!("Crawl cancelled - visited {} URLs", stats.urls_visited);
 
     println!("\nCrawler finished!");
 

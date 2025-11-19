@@ -1,0 +1,13 @@
+[package]
+name = "cancellation"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+scrapely = { workspace = true }
+async-trait = "0.1.89"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+reqwest = { version = "0.12", features = ["json"] }
+scraper = "0.24.0"
+anyhow = "1.0"

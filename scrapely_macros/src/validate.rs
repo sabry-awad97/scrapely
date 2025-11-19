@@ -51,7 +51,7 @@ pub fn validate_field_selector(field: &syn::Field, attrs: &FieldAttrs) -> Result
 }
 
 /// Validate that field doesn't have conflicting attributes
-pub fn validate_no_conflicts(field: &syn::Field, attrs: &FieldAttrs) -> Result<()> {
+pub fn _validate_no_conflicts(field: &syn::Field, attrs: &FieldAttrs) -> Result<()> {
     // Check for conflicting attr and default
     if attrs.attr.is_some() && attrs.default {
         let field_name = field

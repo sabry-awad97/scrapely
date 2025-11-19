@@ -3,6 +3,32 @@
 version = 4
 
 [[package]]
+name = "advanced"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "regex",
+ "reqwest",
+ "scrapely",
+ "scraper",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "advanced_config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqwest",
+ "scrapely",
+ "scraper",
+ "tokio",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -86,6 +112,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
 
 [[package]]
+name = "cancellation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqwest",
+ "scrapely",
+ "scraper",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -138,6 +177,18 @@ checksum = "13b588ba4ac1a99f7f2964d24b3d896ddc6bf847ee3855dbd4366f058cfcd331"
 dependencies = [
  "quote",
  "syn 2.0.110",
+]
+
+[[package]]
+name = "custom_observer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqwest",
+ "scrapely",
+ "scraper",
+ "tokio",
 ]
 
 [[package]]
@@ -1103,6 +1154,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rate_limiting"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqwest",
+ "scrapely",
+ "scraper",
+ "tokio",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1486,6 +1549,18 @@ name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
+
+[[package]]
+name = "stats_monitoring"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "reqwest",
+ "scrapely",
+ "scraper",
+ "tokio",
+]
 
 [[package]]
 name = "string_cache"
