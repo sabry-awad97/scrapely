@@ -98,10 +98,7 @@ use std::{
 };
 
 use futures_util::StreamExt;
-use tokio::{
-    sync::{Notify, mpsc},
-    time::sleep,
-};
+use tokio::{sync::mpsc, time::sleep};
 use tokio_stream::wrappers::ReceiverStream;
 
 /// Result of visiting a URL during crawling
@@ -174,16 +171,19 @@ impl CrawlError {
 pub struct CompletionDetector {
     pub(crate) pending_urls: Arc<AtomicUsize>,
     pub(crate) active_scrapers: Arc<AtomicUsize>,
-    completion_notify: Arc<Notify>,
+    completion_tx: Arc<tokio::sync::watch::Sender<bool>>,
+    completion_rx: tokio::sync::watch::Receiver<bool>,
 }
 
 impl CompletionDetector {
     /// Create a new CompletionDetector
     pub fn new() -> Self {
+        let (tx, rx) = tokio::sync::watch::channel(false);
         Self {
             pending_urls: Arc::new(AtomicUsize::new(0)),
             active_scrapers: Arc::new(AtomicUsize::new(0)),
-            completion_notify: Arc::new(Notify::new()),
+            completion_tx: Arc::new(tx),
+            completion_rx: rx,
         }
     }
 
@@ -234,13 +234,34 @@ impl CompletionDetector {
 
         if pending == 0 && active == 0 {
             // No pending work and no active scrapers - we're done
-            self.completion_notify.notify_waiters();
+            let _ = self.completion_tx.send(true);
         }
     }
 
     /// Wait for crawl completion
     pub async fn wait_for_completion(&self) {
-        self.completion_notify.notified().await;
+        // Create a clone of the receiver to wait for changes
+        let mut rx = self.completion_rx.clone();
+
+        // Check counters first - handles case where we start with 0 work
+        // and check_completion is never called
+        if self.pending_urls.load(Ordering::SeqCst) == 0
+            && self.active_scrapers.load(Ordering::SeqCst) == 0
+        {
+            return;
+        }
+
+        // Check if already marked complete in channel
+        if *rx.borrow() {
+            return;
+        }
+
+        // Wait for completion signal
+        while rx.changed().await.is_ok() {
+            if *rx.borrow() {
+                return;
+            }
+        }
     }
 
     /// Get the current pending URL count
